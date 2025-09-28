@@ -1,0 +1,170 @@
+# Importar bibliotecas necessárias 
+import pandas as pd # Manipulação de dados e Excel
+import matplotlib.pyplot as plt # Criar gráficos 
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer # Gerar PDFs
+from reportlab.lib.styles import getSampleStyleSheet # Para definir estilos de textos no PDF
+from tabulate import tabulate  # Exibir tabelas
+
+# ===============================
+#       FUNÇÕES DO SISTEMA
+# ===============================
+
+# Carrega dados de um arquivo Excel ou cria DataFrames vazios se não existir
+def carregar_dados(arquivo_excel):
+    try:
+        funcionarios = pd.read_excel(arquivo_excel, sheet_name="FUNCIONARIOS")
+    except:
+        funcionarios = pd.DataFrame(columns=["Nome", "CPF", "Cargo"])  # Cria tabela de funcionários
+    
+    try:
+        acidentes = pd.read_excel(arquivo_excel, sheet_name="ACIDENTES")
+    except:
+        acidentes = pd.DataFrame(columns=["Funcionario", "Data", "Tipo de Acidente", "Status"])  # Cria tabela de acidentes
+    
+    try:
+        ocorrencias = pd.read_excel(arquivo_excel, sheet_name="OCORRENCIAS")
+    except:
+        ocorrencias = pd.DataFrame(columns=["Descricao", "Data"])  # Cria tabela de ocorrências
+    
+    return funcionarios, acidentes, ocorrencias
+
+# Salva os DataFrames atualizados no Excel
+def salvar_dados(arquivo_excel, funcionarios, acidentes, ocorrencias):
+    with pd.ExcelWriter(arquivo_excel) as writer:
+        funcionarios.to_excel(writer, sheet_name="FUNCIONARIOS", index=False)
+        acidentes.to_excel(writer, sheet_name="ACIDENTES", index=False)
+        ocorrencias.to_excel(writer, sheet_name="OCORRENCIAS", index=False)
+    print("✅ Dados salvos com sucesso!")
+
+# Exibe qualquer DataFrame em tabela organizada no console
+def mostrar_tabela(df, titulo):
+    if df.empty:
+        print(f"❌ Nenhum registro em {titulo}.")
+    else:
+        print(f"\n--- {titulo} ---")
+        print(tabulate(df, headers='keys', tablefmt='grid', showindex=False))  # Exibe tabela com cabeçalhos e linhas bem formatadas
+
+# Cadastrar novo funcionário
+def cadastrar_funcionario(funcionarios):
+    nome = input("Nome do funcionário: ")
+    cpf = input("CPF: ")
+    cargo = input("Cargo: ")
+    funcionarios.loc[len(funcionarios)] = [nome, cpf, cargo] 
+    print(f"✅ Funcionário '{nome}' cadastrado!")
+    mostrar_tabela(funcionarios, "Funcionários") 
+
+# Cadastrar novo acidente
+def cadastrar_acidente(funcionarios, acidentes):
+    if funcionarios.empty:
+        print("❌ Nenhum funcionário cadastrado.")
+        return
+    print("Funcionários cadastrados:")
+    for i, f in funcionarios.iterrows():
+        print(f"{i+1}. {f['Nome']}")
+    escolha = int(input("Escolha o funcionário (número): ")) - 1
+    nome_func = funcionarios.loc[escolha, "Nome"]
+    data = input("Data do acidente (dd/mm/aaaa): ")
+    tipo = input("Tipo de acidente: ")
+    status = input("Status (Com afastamento / Sem afastamento): ")
+    acidentes.loc[len(acidentes)] = [nome_func, data, tipo, status]
+    print(f"✅ Acidente cadastrado para '{nome_func}'!")
+    mostrar_tabela(acidentes, "Acidentes")
+
+# Cadastrar nova ocorrência
+def cadastrar_ocorrencia(ocorrencias):
+    descricao = input("Descrição da ocorrência: ")
+    data = input("Data (dd/mm/aaaa): ")
+    ocorrencias.loc[len(ocorrencias)] = [descricao, data]
+    print("✅ Ocorrência cadastrada!")
+    mostrar_tabela(ocorrencias, "Ocorrências")
+
+# Calcula métricas gerais de acidentes
+def calcular_metricas(acidentes):
+    total_acidentes = len(acidentes)
+    afastados = acidentes[acidentes['Status'] == 'Com afastamento']
+    percent_afastamento = (len(afastados) / total_acidentes) * 100 if total_acidentes > 0 else 0
+    return total_acidentes, percent_afastamento
+
+# Gera relatório mensal de acidentes
+def relatorio_mensal(acidentes):
+    acidentes['Data'] = pd.to_datetime(acidentes['Data'], dayfirst=True)
+    return acidentes.groupby(acidentes['Data'].dt.month)['Funcionario'].count()
+
+# Gera gráficos de acidentes
+def gerar_graficos(acidentes):
+    tipos = acidentes['Tipo de Acidente'].value_counts()
+    plt.figure(figsize=(6,6))
+    plt.pie(tipos, labels=tipos.index, autopct='%1.1f%%')
+    plt.title("Distribuição de Tipos de Acidentes")
+    plt.show()
+
+    acidentes_por_mes = relatorio_mensal(acidentes)
+    plt.figure(figsize=(8,4))
+    acidentes_por_mes.plot(kind='bar')
+    plt.title("Acidentes por Mês")
+    plt.xlabel("Mês")
+    plt.ylabel("Quantidade")
+    plt.show()
+
+# Gera relatório em PDF com métricas principais
+def gerar_pdf(total_acidentes, percent_afastamento):
+    doc = SimpleDocTemplate("relatorio_seguranca.pdf")
+    styles = getSampleStyleSheet()
+    story = []
+    story.append(Paragraph("Relatório de Segurança do Trabalho", styles['Title']))
+    story.append(Spacer(1,12))
+    story.append(Paragraph(f"Total de acidentes: {total_acidentes}", styles['Normal']))
+    story.append(Paragraph(f"% com afastamento: {percent_afastamento:.2f}%", styles['Normal']))
+    doc.build(story)
+    print("✅ Relatório PDF gerado: relatorio_seguranca.pdf")
+
+# ===============================
+#          MENU PRINCIPAL
+# ===============================
+def main():
+    print("=== Sistema de Segurança do Trabalho ===")
+    arquivo = input("Digite o nome do arquivo Excel (ex: seguranca.xlsx): ")
+    funcionarios, acidentes, ocorrencias = carregar_dados(arquivo)
+
+    while True:
+        print("\n=== MENU ===")
+        print("1. Cadastrar funcionário")
+        print("2. Cadastrar acidente")
+        print("3. Cadastrar ocorrência")
+        print("4. Ver métricas gerais")
+        print("5. Ver relatório mensal de acidentes")
+        print("6. Gerar gráficos")
+        print("7. Exportar relatório PDF")
+        print("8. Salvar dados")
+        print("9. Sair")
+
+        opcao = input("Escolha uma opção: ")
+
+        if opcao == "1":
+            cadastrar_funcionario(funcionarios)
+        elif opcao == "2":
+            cadastrar_acidente(funcionarios, acidentes)
+        elif opcao == "3":
+            cadastrar_ocorrencia(ocorrencias)
+        elif opcao == "4":
+            total_acidentes, percent_afastamento = calcular_metricas(acidentes)
+            print(f"Total de acidentes: {total_acidentes}")
+            print(f"% com afastamento: {percent_afastamento:.2f}%")
+        elif opcao == "5":
+            print("Relatório de Acidentes por Mês:")
+            print(relatorio_mensal(acidentes))
+        elif opcao == "6":
+            gerar_graficos(acidentes)
+        elif opcao == "7":
+            total_acidentes, percent_afastamento = calcular_metricas(acidentes)
+            gerar_pdf(total_acidentes, percent_afastamento)
+        elif opcao == "8":
+            salvar_dados(arquivo, funcionarios, acidentes, ocorrencias)
+        elif opcao == "9":
+            print("Saindo do sistema...")
+            break
+        else:
+            print("Opção inválida!")
+
+if __name__ == "__main__":
+    main()
